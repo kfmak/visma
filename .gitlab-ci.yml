@@ -1,0 +1,88 @@
+stages:
+  - build
+  - test
+
+cache: &cache_configuration
+  key: ${CI_COMMIT_REF_SLUG}
+  paths:
+    - _build
+    - .mix
+    - deps
+    - priv/plts
+  policy: pull-push
+
+build:cache:
+  stage: build
+  image: elixir:1.13.2-alpine
+  variables:
+    MIX_ENV: "test"
+  script:
+    - apk add build-base git
+    - mix local.hex --force --if-missing
+    - mix local.rebar --if-missing
+    - mix do deps.get, deps.compile
+    - mix compile
+  cache:
+    <<: *cache_configuration
+
+test:coverage:
+  image: elixir:1.13.2-alpine
+  stage: test
+  needs:
+    - build:cache
+  variables:
+    MIX_ENV: "test"
+  before_script:
+    - apk --no-cache add --upgrade git
+    - mix setup
+  script:
+    - mix cover
+  artifacts:
+    name: "${CI_JOB_STAGE-$CI_COMMIT_REF_SLUG}:test:coverage"
+    paths:
+      - cover
+  coverage: '/\d+.\d+\%\s+\|\s+Total/'
+  cache:
+    <<: *cache_configuration
+
+test:credo:
+  image: elixir:1.13.2-alpine
+  stage: test
+  needs:
+    - build:cache
+  variables:
+    MIX_ENV: "test"
+  before_script:
+    - apk --no-cache add --upgrade git
+  script:
+    - mix credo suggest --all --format=oneline
+  cache:
+    <<: *cache_configuration
+
+test:doctor:
+  image: elixir:1.13.2-alpine
+  stage: test
+  needs:
+    - build:cache
+  variables:
+    MIX_ENV: "test"
+  before_script:
+    - apk --no-cache add --upgrade git
+  script:
+    - mix doctor
+  cache:
+    <<: *cache_configuration
+
+test:dialyzer:
+  image: elixir:1.13.2-alpine
+  stage: test
+  needs:
+    - build:cache
+  variables:
+    MIX_ENV: "test"
+  before_script:
+    - apk --no-cache add --upgrade git erlang-dev
+  script:
+    - mix dialyzer
+  cache:
+    <<: *cache_configuration
